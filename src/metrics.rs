@@ -342,7 +342,11 @@ impl MetricsCollector {
             return Ok(());
         }
 
-        info!("Starting metrics collection on {}", self.config.bind);
+        if let Some(bind_addr) = &self.config.bind {
+            info!("Starting metrics collection on {}", bind_addr);
+        } else {
+            info!("Metrics collection enabled without bind address");
+        }
 
         // 简化实现，暂时不启动HTTP服务器
         // 可以通过export_metrics()方法获取指标

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Arg, Command};
 use dynamic_proxy::{
-    Config, ConfigManager, HealthChecker, MetricsCollector, ProxyServer, RouterManager,
+    Config, ConfigManager, HealthChecker, MetricsCollector, ProxyServer, ReloadCoordinator, RouterManager,
 };
 use std::sync::Arc;
 use tokio::signal;
@@ -111,11 +111,18 @@ async fn main() -> Result<()> {
     }
 
     // 创建配置管理器
-    let config_manager = Arc::new(ConfigManager::new(config_path.clone()));
+    let mut config_manager = ConfigManager::new(config_path.clone());
     config_manager
         .load()
         .await
         .context("Failed to load configuration")?;
+
+    // 启动文件监控
+    let reload_rx = config_manager
+        .start_file_watcher()
+        .context("Failed to start file watcher")?;
+
+    let config_manager = Arc::new(config_manager);
 
     // 创建核心组件
     let router_manager = Arc::new(RouterManager::new());
@@ -161,51 +168,82 @@ async fn main() -> Result<()> {
         .context("Failed to start proxy server")?;
 
     info!("Dynamic Proxy started successfully");
-    info!("TCP listening on: {}", config.server.tcp_bind);
-    info!("UDP listening on: {}", config.server.udp_bind);
-    if config.metrics.enabled {
-        info!(
-            "Metrics available at: http://{}{}",
-            config.metrics.bind, config.metrics.path
-        );
+
+    // 显示启用的协议
+    if let Some(tcp_bind) = &config.server.tcp_bind {
+        info!("TCP listening on: {}", tcp_bind);
+    } else {
+        info!("TCP proxy disabled");
     }
+
+    if let Some(udp_bind) = &config.server.udp_bind {
+        info!("UDP listening on: {}", udp_bind);
+    } else {
+        info!("UDP proxy disabled");
+    }
+
+    // 显示Redis配置状态
+    if config.redis.is_some() {
+        info!("Redis integration enabled");
+    } else {
+        info!("Redis integration disabled");
+    }
+
+    if config.metrics.enabled {
+        if let (Some(bind), Some(path)) = (&config.metrics.bind, &config.metrics.path) {
+            info!("Metrics available at: http://{}{}", bind, path);
+        } else {
+            info!("Metrics collection enabled");
+        }
+    }
+
+    // 启动热重载协调器
+    let reload_coordinator = Arc::new(ReloadCoordinator::new(
+        config_manager.clone(),
+        proxy_server.clone(),
+        router_manager.clone(),
+        health_checker.clone(),
+        metrics_collector.clone(),
+    ));
+
+    let reload_coordinator_task = reload_coordinator.clone();
+    tokio::spawn(async move {
+        if let Err(e) = reload_coordinator_task.start_hot_reload(reload_rx).await {
+            error!("Hot reload coordinator error: {}", e);
+        }
+    });
 
     // 设置信号处理
     let proxy_server_shutdown = proxy_server.clone();
     let router_manager_shutdown = router_manager.clone();
+    let reload_coordinator_signal = reload_coordinator.clone();
     tokio::spawn(async move {
-        if let Err(e) = wait_for_shutdown_signal().await {
-            error!("Signal handling error: {}", e);
-        }
+        match wait_for_signal().await {
+            Ok(SignalType::Shutdown) => {
+                info!("Shutdown signal received, starting graceful shutdown...");
 
-        info!("Shutdown signal received, starting graceful shutdown...");
+                // 优雅关闭代理服务器
+                if let Err(e) = proxy_server_shutdown.graceful_shutdown(10).await {
+                    error!("Failed to gracefully shutdown proxy server: {}", e);
+                }
 
-        // 优雅关闭代理服务器
-        if let Err(e) = proxy_server_shutdown.graceful_shutdown(30).await {
-            error!("Failed to gracefully shutdown proxy server: {}", e);
-        }
+                // 关闭路由管理器
+                if let Err(e) = router_manager_shutdown.shutdown().await {
+                    error!("Failed to shutdown router manager: {}", e);
+                }
 
-        // 关闭路由管理器
-        if let Err(e) = router_manager_shutdown.shutdown().await {
-            error!("Failed to shutdown router manager: {}", e);
-        }
-
-        info!("Graceful shutdown completed");
-        std::process::exit(0);
-    });
-
-    // 配置热重载
-    let _config_manager_reload = config_manager.clone();
-    let _proxy_server_reload = proxy_server.clone();
-    tokio::spawn(async move {
-        let mut reload_interval = tokio::time::interval(std::time::Duration::from_secs(60));
-
-        loop {
-            reload_interval.tick().await;
-
-            // 检查配置文件是否有更新
-            // 这里可以实现文件监控或定期检查
-            // 为了简化，我们暂时跳过自动重载
+                info!("Graceful shutdown completed");
+                std::process::exit(0);
+            }
+            Ok(SignalType::Reload) => {
+                info!("Reload signal received, triggering configuration reload...");
+                if let Err(e) = reload_coordinator_signal.manual_reload().await {
+                    error!("Failed to reload configuration: {}", e);
+                }
+            }
+            Err(e) => {
+                error!("Signal handling error: {}", e);
+            }
         }
     });
 
@@ -250,8 +288,15 @@ fn init_logging(level: &str, format: &str) -> Result<()> {
     Ok(())
 }
 
-/// 等待关闭信号
-async fn wait_for_shutdown_signal() -> Result<()> {
+/// 信号类型
+#[derive(Debug)]
+enum SignalType {
+    Shutdown,
+    Reload,
+}
+
+/// 等待信号
+async fn wait_for_signal() -> Result<SignalType> {
     #[cfg(unix)]
     {
         use signal::unix::{SignalKind, signal};
@@ -260,15 +305,20 @@ async fn wait_for_shutdown_signal() -> Result<()> {
         let mut sigint = signal(SignalKind::interrupt())?;
         let mut sighup = signal(SignalKind::hangup())?;
 
-        tokio::select! {
-            _ = sigterm.recv() => {
-                info!("Received SIGTERM");
-            }
-            _ = sigint.recv() => {
-                info!("Received SIGINT");
-            }
-            _ = sighup.recv() => {
-                info!("Received SIGHUP");
+        loop {
+            tokio::select! {
+                _ = sigterm.recv() => {
+                    info!("Received SIGTERM");
+                    return Ok(SignalType::Shutdown);
+                }
+                _ = sigint.recv() => {
+                    info!("Received SIGINT");
+                    return Ok(SignalType::Shutdown);
+                }
+                _ = sighup.recv() => {
+                    info!("Received SIGHUP");
+                    return Ok(SignalType::Reload);
+                }
             }
         }
     }
@@ -278,17 +328,19 @@ async fn wait_for_shutdown_signal() -> Result<()> {
         let mut ctrl_c = signal::windows::ctrl_c()?;
         let mut ctrl_break = signal::windows::ctrl_break()?;
 
-        tokio::select! {
-            _ = ctrl_c.recv() => {
-                info!("Received Ctrl+C");
-            }
-            _ = ctrl_break.recv() => {
-                info!("Received Ctrl+Break");
+        loop {
+            tokio::select! {
+                _ = ctrl_c.recv() => {
+                    info!("Received Ctrl+C");
+                    return Ok(SignalType::Shutdown);
+                }
+                _ = ctrl_break.recv() => {
+                    info!("Received Ctrl+Break");
+                    return Ok(SignalType::Shutdown);
+                }
             }
         }
     }
-
-    Ok(())
 }
 
 /// 打印版本信息

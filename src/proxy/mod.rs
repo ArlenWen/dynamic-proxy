@@ -33,17 +33,35 @@ impl ProxyServer {
         health_checker: Arc<HealthChecker>,
         metrics_collector: Arc<MetricsCollector>,
     ) -> Self {
-        Self {
-            config: config.clone(),
-            router_manager: router_manager.clone(),
-            health_checker: health_checker.clone(),
-            metrics_collector: metrics_collector.clone(),
-            tcp_proxy: Some(TcpProxy::new(
+        // 只在配置了TCP时创建TCP代理
+        let tcp_proxy = if config.tcp_bind.is_some() {
+            Some(TcpProxy::new(
                 config.clone(),
                 router_manager.clone(),
                 metrics_collector.clone(),
-            )),
-            udp_proxy: Some(UdpProxy::new(config, router_manager, metrics_collector)),
+            ))
+        } else {
+            None
+        };
+
+        // 只在配置了UDP时创建UDP代理
+        let udp_proxy = if config.udp_bind.is_some() {
+            Some(UdpProxy::new(
+                config.clone(),
+                router_manager.clone(),
+                metrics_collector.clone(),
+            ))
+        } else {
+            None
+        };
+
+        Self {
+            config,
+            router_manager,
+            health_checker,
+            metrics_collector,
+            tcp_proxy,
+            udp_proxy,
             running: Arc::new(RwLock::new(false)),
             start_time: Instant::now(),
         }
@@ -61,8 +79,19 @@ impl ProxyServer {
         }
 
         info!("Starting proxy server...");
-        info!("TCP bind address: {}", self.config.tcp_bind);
-        info!("UDP bind address: {}", self.config.udp_bind);
+
+        // 显示配置的绑定地址
+        if let Some(tcp_bind) = &self.config.tcp_bind {
+            info!("TCP bind address: {}", tcp_bind);
+        } else {
+            info!("TCP proxy disabled");
+        }
+
+        if let Some(udp_bind) = &self.config.udp_bind {
+            info!("UDP bind address: {}", udp_bind);
+        } else {
+            info!("UDP proxy disabled");
+        }
 
         // 启动健康检查
         self.health_checker

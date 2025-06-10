@@ -1,0 +1,139 @@
+# Dynamic Proxy Configuration Examples
+# 这个文件展示了不同的配置选项
+
+# 示例1：完整配置（TCP + UDP + Redis）
+[server]
+tcp_bind = "0.0.0.0:8080"      # TCP监听地址
+udp_bind = "0.0.0.0:8081"      # UDP监听地址
+worker_threads = 4
+max_connections = 10000
+connection_timeout = 30  # seconds
+buffer_size = 8192
+
+[redis]
+url = "redis://localhost:6379"
+password = "Qwert12345"
+db = 0
+pool_size = 10
+connection_timeout = 5  # seconds
+command_timeout = 3     # seconds
+
+[logging]
+level = "info"
+format = "pretty"  # "json" or "pretty"
+# file = "/var/log/dynamic-proxy.log"
+max_size = 100  # MB
+max_files = 10
+
+[metrics]
+enabled = true
+bind = "0.0.0.0:9090"
+path = "/metrics"
+collect_interval = 10  # seconds
+
+[health_check]
+enabled = true
+interval = 30      # seconds
+timeout = 5        # seconds
+retries = 3
+failure_threshold = 3
+success_threshold = 2
+
+# 路由器配置
+[routers.round_robin]
+plugin = "round_robin"
+config = {}
+
+[routers.weighted]
+plugin = "weighted"
+config = { smooth_weighted = true }
+
+[routers.hash_ip]
+plugin = "hash"
+config = { hash_key = "client_ip" }
+
+# 路由规则
+[[rules]]
+name = "web_traffic"
+protocol = "tcp"
+enabled = true
+router = "round_robin"
+
+[[rules.backends]]
+id = "web1"
+address = "192.168.1.10:80"
+weight = 1
+enabled = true
+
+[[rules.backends]]
+id = "web2"
+address = "192.168.1.11:80"
+weight = 1
+enabled = true
+
+# ===================================
+# 示例2：仅TCP配置（无Redis）
+# ===================================
+# [server]
+# tcp_bind = "0.0.0.0:8080"      # 只启用TCP
+# # udp_bind = "0.0.0.0:8081"    # UDP被注释掉，禁用UDP代理
+# worker_threads = 2
+# max_connections = 5000
+# connection_timeout = 30
+# buffer_size = 4096
+
+# # 不配置[redis]部分，禁用Redis集成
+
+# [logging]
+# level = "info"
+# format = "json"
+
+# [metrics]
+# enabled = false  # 禁用指标收集
+
+# [health_check]
+# enabled = false  # 禁用健康检查
+
+# ===================================
+# 示例3：仅UDP配置
+# ===================================
+# [server]
+# # tcp_bind = "0.0.0.0:8080"    # TCP被注释掉，禁用TCP代理
+# udp_bind = "0.0.0.0:8081"      # 只启用UDP
+# worker_threads = 1
+# max_connections = 1000
+# connection_timeout = 10
+# buffer_size = 1024
+
+# [logging]
+# level = "warn"
+# format = "pretty"
+
+# [metrics]
+# enabled = true
+# bind = "127.0.0.1:9090"
+# path = "/metrics"
+
+# [health_check]
+# enabled = true
+# interval = 60
+# timeout = 10
+# retries = 2
+# failure_threshold = 2
+# success_threshold = 1
+
+# ===================================
+# 示例4：最小配置
+# ===================================
+# [server]
+# tcp_bind = "127.0.0.1:8080"   # 最小TCP配置
+
+# [logging]
+# level = "info"
+# format = "pretty"
+
+# [metrics]
+# enabled = false
+
+# [health_check]
+# enabled = false

@@ -56,6 +56,15 @@ impl UdpProxy {
 
     /// 启动UDP代理
     pub async fn start(&self) -> Result<()> {
+        // 检查是否配置了UDP绑定地址
+        let udp_bind = match &self.config.udp_bind {
+            Some(addr) => *addr,
+            None => {
+                warn!("UDP bind address not configured, skipping UDP proxy startup");
+                return Ok(());
+            }
+        };
+
         {
             let mut running = self.running.write().await;
             if *running {
@@ -65,14 +74,14 @@ impl UdpProxy {
             *running = true;
         }
 
-        info!("Starting UDP proxy on {}", self.config.udp_bind);
+        info!("Starting UDP proxy on {}", udp_bind);
 
-        let socket = UdpSocket::bind(self.config.udp_bind)
+        let socket = UdpSocket::bind(udp_bind)
             .await
-            .with_context(|| format!("Failed to bind UDP socket to {}", self.config.udp_bind))?;
+            .with_context(|| format!("Failed to bind UDP socket to {}", udp_bind))?;
 
         let socket = Arc::new(socket);
-        info!("UDP proxy listening on {}", self.config.udp_bind);
+        info!("UDP proxy listening on {}", udp_bind);
 
         let router_manager = self.router_manager.clone();
         let metrics_collector = self.metrics_collector.clone();
@@ -277,9 +286,10 @@ impl UdpProxy {
         config: ServerConfig,
     ) -> ProxyResult<UdpSession> {
         // 创建路由上下文
+        let target_addr = config.udp_bind.unwrap_or_else(|| "0.0.0.0:0".parse().unwrap());
         let routing_context = RoutingContext::new(
             client_addr,
-            config.udp_bind, // 这里应该是实际的目标地址
+            target_addr, // 这里应该是实际的目标地址
             Protocol::Udp,
         );
 
@@ -476,7 +486,7 @@ impl UdpProxy {
 #[derive(Debug, Clone)]
 pub struct UdpProxyStatus {
     pub running: bool,
-    pub bind_address: SocketAddr,
+    pub bind_address: Option<SocketAddr>,
     pub active_sessions: usize,
 }
 
@@ -490,8 +500,8 @@ mod tests {
     #[tokio::test]
     async fn test_udp_proxy_creation() {
         let config = ServerConfig {
-            tcp_bind: "127.0.0.1:0".parse().unwrap(),
-            udp_bind: "127.0.0.1:0".parse().unwrap(),
+            tcp_bind: Some("127.0.0.1:0".parse().unwrap()),
+            udp_bind: Some("127.0.0.1:0".parse().unwrap()),
             worker_threads: None,
             max_connections: Some(1000),
             connection_timeout: Some(30),

@@ -1,20 +1,22 @@
 # Dynamic Proxy Configuration File
 
 [server]
-tcp_bind = "0.0.0.0:8080"
-udp_bind = "0.0.0.0:8081"
+# TCP和UDP绑定地址是可选的，可以单独启用或禁用
+tcp_bind = "0.0.0.0:8082"      # 可选：TCP监听地址，注释掉则禁用TCP代理
+udp_bind = "0.0.0.0:8081"      # 可选：UDP监听地址，注释掉则禁用UDP代理
 worker_threads = 4
 max_connections = 10000
 connection_timeout = 30  # seconds
 buffer_size = 8192
 
-[redis]
-url = "redis://localhost:6379"
-password = "Qwert12345"
-db = 0
-pool_size = 10
-connection_timeout = 5  # seconds
-command_timeout = 3     # seconds
+# Redis配置是可选的，如果不需要Redis集成可以注释掉整个[redis]部分
+#[redis]
+#url = "redis://localhost:6379"
+#password = "Qwert12345"
+#db = 0
+#pool_size = 10
+#connection_timeout = 5  # seconds
+#command_timeout = 3     # seconds
 
 [logging]
 level = "info"

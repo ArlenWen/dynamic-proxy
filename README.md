@@ -74,17 +74,23 @@ cp config.toml config.local.toml
 
 ```toml
 [server]
-tcp_bind = "0.0.0.0:8080"      # TCP监听地址
-udp_bind = "0.0.0.0:8081"      # UDP监听地址
+# TCP和UDP绑定地址都是可选的，可以单独启用或禁用
+tcp_bind = "0.0.0.0:8080"      # 可选：TCP监听地址，注释掉则禁用TCP代理
+udp_bind = "0.0.0.0:8081"      # 可选：UDP监听地址，注释掉则禁用UDP代理
 worker_threads = 4              # 工作线程数
 max_connections = 10000         # 最大连接数
 connection_timeout = 30         # 连接超时时间（秒）
 buffer_size = 8192             # 缓冲区大小
 ```
 
-### Redis配置
+**注意**: 至少需要配置TCP或UDP中的一个协议。
+
+### Redis配置（可选）
+
+Redis配置是完全可选的。如果不需要Redis集成，可以完全省略`[redis]`部分：
 
 ```toml
+# Redis配置是可选的，如果不需要可以注释掉整个部分
 [redis]
 url = "redis://localhost:6379"
 password = "your_password"
@@ -128,6 +134,56 @@ enabled = true
 [rules.matcher]
 type = "port"
 port = 80
+```
+
+### 配置示例
+
+#### 仅TCP代理（无Redis）
+```toml
+[server]
+tcp_bind = "0.0.0.0:8080"      # 只启用TCP
+# udp_bind = "0.0.0.0:8081"    # UDP被注释掉，禁用UDP代理
+
+[logging]
+level = "info"
+format = "json"
+
+[metrics]
+enabled = false  # 禁用指标收集
+
+[health_check]
+enabled = false  # 禁用健康检查
+```
+
+#### 仅UDP代理
+```toml
+[server]
+# tcp_bind = "0.0.0.0:8080"    # TCP被注释掉，禁用TCP代理
+udp_bind = "0.0.0.0:8081"      # 只启用UDP
+
+[logging]
+level = "info"
+format = "pretty"
+
+[metrics]
+enabled = true
+bind = "127.0.0.1:9090"
+```
+
+#### 最小配置
+```toml
+[server]
+tcp_bind = "127.0.0.1:8080"   # 最小TCP配置
+
+[logging]
+level = "info"
+format = "pretty"
+
+[metrics]
+enabled = false
+
+[health_check]
+enabled = false
 ```
 
 ## 监控和指标

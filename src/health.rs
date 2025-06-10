@@ -59,9 +59,10 @@ impl HealthChecker {
             *running = true;
         }
 
+        let interval_secs = self.config.interval.unwrap_or(30);
         info!(
             "Starting health checker with interval: {}s",
-            self.config.interval
+            interval_secs
         );
 
         let config = self.config.clone();
@@ -70,7 +71,7 @@ impl HealthChecker {
         let running = self.running.clone();
 
         tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(config.interval));
+            let mut interval = interval(Duration::from_secs(interval_secs));
 
             loop {
                 interval.tick().await;
@@ -203,8 +204,10 @@ impl HealthChecker {
         let mut check_success = false;
 
         // 执行多次重试
-        for attempt in 1..=config.retries {
-            match Self::tcp_health_check(state.address, config.timeout).await {
+        let retries = config.retries.unwrap_or(3);
+        let timeout = config.timeout.unwrap_or(5);
+        for attempt in 1..=retries {
+            match Self::tcp_health_check(state.address, timeout).await {
                 Ok(response_time) => {
                     check_success = true;
                     state.response_time = Some(response_time);
@@ -219,10 +222,10 @@ impl HealthChecker {
                         "Health check failed for {} (attempt {}): {}",
                         state.backend_id, attempt, e
                     );
-                    if attempt == config.retries {
+                    if attempt == retries {
                         error!(
                             "Health check failed for {} after {} retries",
-                            state.backend_id, config.retries
+                            state.backend_id, retries
                         );
                     }
                 }
@@ -238,7 +241,8 @@ impl HealthChecker {
             state.last_success = Some(start_time);
 
             // 检查是否应该标记为健康
-            if !state.healthy && state.consecutive_successes >= config.success_threshold {
+            let success_threshold = config.success_threshold.unwrap_or(2);
+            if !state.healthy && state.consecutive_successes >= success_threshold {
                 state.healthy = true;
                 info!("Backend '{}' marked as healthy", state.backend_id);
 
@@ -256,7 +260,8 @@ impl HealthChecker {
             state.last_failure = Some(start_time);
 
             // 检查是否应该标记为不健康
-            if state.healthy && state.consecutive_failures >= config.failure_threshold {
+            let failure_threshold = config.failure_threshold.unwrap_or(3);
+            if state.healthy && state.consecutive_failures >= failure_threshold {
                 state.healthy = false;
                 warn!("Backend '{}' marked as unhealthy", state.backend_id);
 

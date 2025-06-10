@@ -39,6 +39,15 @@ impl TcpProxy {
 
     /// 启动TCP代理
     pub async fn start(&self) -> Result<()> {
+        // 检查是否配置了TCP绑定地址
+        let tcp_bind = match &self.config.tcp_bind {
+            Some(addr) => *addr,
+            None => {
+                warn!("TCP bind address not configured, skipping TCP proxy startup");
+                return Ok(());
+            }
+        };
+
         {
             let mut running = self.running.write().await;
             if *running {
@@ -48,13 +57,13 @@ impl TcpProxy {
             *running = true;
         }
 
-        info!("Starting TCP proxy on {}", self.config.tcp_bind);
+        info!("Starting TCP proxy on {}", tcp_bind);
 
-        let listener = TcpListener::bind(self.config.tcp_bind)
+        let listener = TcpListener::bind(tcp_bind)
             .await
-            .with_context(|| format!("Failed to bind TCP listener to {}", self.config.tcp_bind))?;
+            .with_context(|| format!("Failed to bind TCP listener to {}", tcp_bind))?;
 
-        info!("TCP proxy listening on {}", self.config.tcp_bind);
+        info!("TCP proxy listening on {}", tcp_bind);
 
         let router_manager = self.router_manager.clone();
         let metrics_collector = self.metrics_collector.clone();
@@ -163,10 +172,11 @@ impl TcpProxy {
         metrics_collector.record_new_connection();
 
         // 创建连接信息
+        let target_addr = config.tcp_bind.unwrap_or_else(|| "0.0.0.0:0".parse().unwrap());
         let mut connection_info = ConnectionInfo::new(
             Protocol::Tcp,
             client_addr,
-            config.tcp_bind, // 这里应该是实际的目标地址
+            target_addr, // 这里应该是实际的目标地址
         );
 
         // 添加到活跃连接列表
@@ -228,9 +238,10 @@ impl TcpProxy {
         config: &ServerConfig,
     ) -> ProxyResult<()> {
         // 创建路由上下文
+        let target_addr = config.tcp_bind.unwrap_or_else(|| "0.0.0.0:0".parse().unwrap());
         let routing_context = RoutingContext::new(
             client_addr,
-            config.tcp_bind, // 这里应该是实际的目标地址
+            target_addr, // 这里应该是实际的目标地址
             Protocol::Tcp,
         );
 
@@ -367,7 +378,7 @@ impl TcpProxy {
 #[derive(Debug, Clone)]
 pub struct TcpProxyStatus {
     pub running: bool,
-    pub bind_address: std::net::SocketAddr,
+    pub bind_address: Option<std::net::SocketAddr>,
     pub active_connections: usize,
 }
 
@@ -381,8 +392,8 @@ mod tests {
     #[tokio::test]
     async fn test_tcp_proxy_creation() {
         let config = ServerConfig {
-            tcp_bind: "127.0.0.1:0".parse().unwrap(),
-            udp_bind: "127.0.0.1:0".parse().unwrap(),
+            tcp_bind: Some("127.0.0.1:0".parse().unwrap()),
+            udp_bind: Some("127.0.0.1:0".parse().unwrap()),
             worker_threads: None,
             max_connections: Some(1000),
             connection_timeout: Some(30),
