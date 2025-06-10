@@ -1,91 +1,80 @@
-# Dynamic Proxy Configuration
-# Production configuration file for the dynamic proxy server
+# Dynamic Proxy Configuration File
 
 [server]
-# TCP proxy listening address
 tcp_bind = "0.0.0.0:8080"
-# UDP proxy listening address
 udp_bind = "0.0.0.0:8081"
-# Buffer size for data transfer
+worker_threads = 4
+max_connections = 10000
+connection_timeout = 30  # seconds
 buffer_size = 8192
-# Maximum concurrent connections
-max_connections = 1000
 
 [redis]
-# Redis connection URL
-url = "redis://127.0.0.1:6379"
-# Connection pool size
+url = "redis://localhost:6379"
+password = "Qwert12345"
+db = 0
 pool_size = 10
-# Connection timeout in milliseconds
-timeout_ms = 5000
-# Cache TTL in seconds
-cache_ttl_secs = 300
-# Maximum retry attempts
-max_retries = 3
-# Retry delay in milliseconds
-retry_delay_ms = 1000
+connection_timeout = 5  # seconds
+command_timeout = 3     # seconds
 
-[tls]
-# Default certificate and key paths
-cert_path = "certs/server.crt"
-key_path = "certs/server.key"
-# Optional CA certificate path
-# ca_path = "certs/ca.crt"
-# Enable SNI-based routing
-sni_routing = true
+[logging]
+level = "info"
+format = "pretty"  # "json" or "pretty"
+# file = "/var/log/dynamic-proxy.log"
+max_size = 100  # MB
+max_files = 10
 
-# Multiple certificates for different hostnames
-[[tls.certificates]]
-hostname = "api.example.com"
-cert_path = "certs/api.crt"
-key_path = "certs/api.key"
+[metrics]
+enabled = true
+bind = "0.0.0.0:9090"
+path = "/metrics"
+collect_interval = 10  # seconds
 
-[[tls.certificates]]
-hostname = "*.example.com"
-cert_path = "certs/wildcard.crt"
-key_path = "certs/wildcard.key"
+[health_check]
+enabled = true
+interval = 30      # seconds
+timeout = 5        # seconds
+retries = 3
+failure_threshold = 3
+success_threshold = 2
 
-[[tls.certificates]]
-hostname = "secure.example.com"
-cert_path = "certs/secure.crt"
-key_path = "certs/secure.key"
+# Router configurations
+[routers.round_robin]
+plugin = "round_robin"
+config = {}
 
-[monitoring]
-# Metrics HTTP server bind address
-metrics_bind = "0.0.0.0:9090"
-# Log level: trace, debug, info, warn, error
-log_level = "info"
-# Enable Prometheus metrics collection
-enable_metrics = true
+[routers.weighted]
+plugin = "weighted"
+config = { smooth_weighted = true }
 
-[plugins]
-# List of enabled routing plugins
-enabled_plugins = ["sni_router", "redis_backend"]
+[routers.hash_ip]
+plugin = "hash"
+config = { hash_key = "client_ip" }
 
-# Plugin-specific configuration
-# Note: plugin_config uses JSON format for complex configurations
-[plugins.plugin_config]
+[routers.least_conn]
+plugin = "least_connections"
+config = {}
 
-# Redis backend plugin configuration
-[plugins.plugin_config.redis_backend]
-redis_url = "redis://127.0.0.1:6379"
-cache_ttl = 300
-connection_timeout = 5
-max_retries = 3
+[routers.random]
+plugin = "random"
+config = {}
 
-# SNI router plugin configuration
-[plugins.plugin_config.sni_router]
-# SNI router specific settings
-default_backend = "default_backend"
-enable_wildcard_matching = true
+# Routing rules
+[[rules]]
+name = "web_traffic"
+protocol = "tcp"
+enabled = true
+router = "round_robin"
 
-# Note: Complex routing rules are typically managed through Redis
-# or programmatically. For simple SNI-based routing, the Redis backend
-# will automatically route based on hostname keys in Redis.
-#
-# Example Redis keys for routing:
-# - "proxy:backends:api.example.com" -> routes api.example.com traffic
-# - "proxy:backends:www.example.com" -> routes www.example.com traffic
-# - "proxy:backends:*.example.com" -> wildcard routing for *.example.com
-#
-# Use scripts/setup_redis_backends.sh to configure backend routing
+[[rules.backends]]
+id = "web_server_1"
+name = "web_server_1"
+address = "10.20.100.12:12087"
+weight = 100
+health_check = true
+enabled = true
+
+[rules.matcher]
+type = "port"
+port = 8080
+
+

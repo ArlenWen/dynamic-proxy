@@ -3,7 +3,9 @@ use std::process::Command;
 
 fn main() {
     // 获取构建时间
-    let build_time = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+    let build_time = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
 
     // 获取Git提交哈希
@@ -33,7 +35,7 @@ fn main() {
 
 fn get_git_hash() -> Option<String> {
     Command::new("git")
-        .args(&["rev-parse", "--short", "HEAD"])
+        .args(["rev-parse", "--short", "HEAD"])
         .output()
         .ok()
         .and_then(|output| {
@@ -47,7 +49,7 @@ fn get_git_hash() -> Option<String> {
 
 fn get_git_branch() -> Option<String> {
     Command::new("git")
-        .args(&["rev-parse", "--abbrev-ref", "HEAD"])
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .ok()
         .and_then(|output| {
@@ -61,7 +63,7 @@ fn get_git_branch() -> Option<String> {
 
 fn get_rust_version() -> Option<String> {
     Command::new("rustc")
-        .args(&["--version"])
+        .args(["--version"])
         .output()
         .ok()
         .and_then(|output| {

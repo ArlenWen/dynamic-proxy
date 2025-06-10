@@ -1,0 +1,22 @@
+services:
+  # Redis service for dynamic proxy backend configuration
+  redis:
+    image: redis:7.4.4-alpine
+    container_name: dynamic-proxy-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: [
+      "redis-server",
+      "--requirepass", "Qwert12345"
+    ]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+
+
+

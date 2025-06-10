@@ -1,424 +1,213 @@
-# Dynamic Proxy Server
+# Dynamic Proxy
 
-一个功能完整的动态代理服务器，基于Rust实现，支持TCP/UDP流量代理、完整的TLS支持、Redis集成和插件化架构。
+TCP/UDP流量转发程序，具备插件化路由系统、动态配置加载、健康检查和监控指标功能。
 
-## ✨ 核心特性
+## 特性
 
-### 🚀 代理功能
-- **TCP/UDP代理** - 高性能的TCP和UDP流量代理
-- **TLS支持** - 完整的TLS支持，包括SNI检测和多证书管理
-- **负载均衡** - 支持权重和健康检查的负载均衡
-- **连接管理** - 智能连接池和会话管理
+- **TCP/UDP流量转发**: 支持同时处理TCP和UDP流量
+- **插件化路由系统**: 支持多种路由算法（轮询、加权、哈希、最少连接、随机）
+- **动态配置加载**: 支持运行时配置热重载，无需停机
+- **健康检查**: 自动监控后端服务器健康状态
+- **监控指标**: 集成Prometheus指标收集
+- **优雅关闭**: 支持信号处理和优雅关闭
+- **日志记录**: 结构化日志输出，支持多种格式
 
-### 🔒 TLS增强功能
-- **SNI检测** - 支持SNI提取和证书选择
-- **多证书支持** - 支持基于SNI的多证书配置
-- **通配符证书** - 支持通配符域名证书匹配
-- **动态证书管理** - 运行时证书加载和管理
+## 架构设计
 
-### 🔄 Redis集成
-- **Redis连接** - 完整的Redis连接池和异步操作
-- **后端管理** - 动态后端服务器配置和管理
-- **健康检查** - 自动健康检查并更新Redis状态
-- **缓存策略** - 本地缓存与Redis的双层缓存
+### 核心组件
 
-### 🔌 路由系统
-- **插件化架构** - 可扩展的路由插件系统
-- **智能路由** - 支持精确匹配、前缀匹配和通配符匹配
-- **动态配置** - 支持运行时配置更新
-- **规则引擎** - 灵活的路由规则配置
+1. **配置管理器 (ConfigManager)**: 负责配置文件的加载、验证和热重载
+2. **路由管理器 (RouterManager)**: 管理所有路由器实例和路由规则
+3. **代理服务器 (ProxyServer)**: 统一管理TCP和UDP代理服务
+4. **健康检查器 (HealthChecker)**: 监控后端服务器健康状态
+5. **监控指标收集器 (MetricsCollector)**: 收集和导出Prometheus指标
 
-### 📊 监控和管理
-- **Prometheus指标** - 完整的指标收集和暴露
-- **结构化日志** - 基于tracing的高性能日志系统
-- **健康检查API** - 后端服务健康状态监控
-- **优雅关闭** - 支持信号处理和优雅关闭
+### 路由器插件
 
-### 🛡️ 优雅关机系统
-- **多信号支持** - 支持SIGINT、SIGTERM、SIGQUIT、SIGHUP等信号
-- **连接排空** - 优雅等待现有连接完成或超时
-- **资源清理** - 自动清理所有资源和后台任务
-- **状态管理** - 完整的关机状态跟踪和监控
+- **轮询路由器 (RoundRobinRouter)**: 按顺序轮流选择后端服务器
+- **加权路由器 (WeightedRouter)**: 根据权重选择后端服务器
+- **哈希路由器 (HashRouter)**: 基于客户端IP或其他属性进行一致性哈希
+- **最少连接路由器 (LeastConnectionsRouter)**: 选择当前连接数最少的后端
+- **随机路由器 (RandomRouter)**: 随机选择后端服务器
 
-## 🚀 快速开始
+## 安装和使用
 
-### 前置要求
-
-- Rust 1.70+
-- Redis服务器
-- 可选：OpenSSL/TLS证书
-
-### 安装和运行
-
-#### 🎯 快速演示（推荐）
-
-使用交互式演示菜单，一键体验所有功能：
+### 编译
 
 ```bash
-bash scripts/demo.sh
-```
+# 克隆项目
+git clone <repository-url>
+cd dynamic-proxy
 
-#### 📋 手动步骤
-
-1. **启动Redis服务器**
-```bash
-redis-server
-```
-
-2. **初始化Redis后端配置**
-```bash
-bash scripts/setup_redis_backends.sh
-```
-
-3. **构建项目**
-```bash
+# 编译
 cargo build --release
 ```
 
-4. **运行代理服务器**
-```bash
-# 基础演示（无Redis/TLS）
-bash scripts/demo/run_basic_demo.sh
+### 配置
 
-# 或增强演示（完整功能）
-bash scripts/demo/run_enhanced_demo.sh
-
-# 或直接运行主程序
-cargo run --release
-```
-
-### 🧪 测试和验证
-
-#### 测试客户端
-```bash
-# 在代理运行时，在另一个终端测试
-bash scripts/test/run_test_client.sh
-```
-
-#### 功能测试
-```bash
-# 验证代码修复和编译
-bash scripts/test/test_fixes.sh
-
-# 完整功能测试
-bash scripts/test_enhanced_features.sh
-
-# 优雅关机测试
-bash scripts/test_graceful_shutdown.sh
-```
-
-#### 优雅关机演示
-```bash
-bash scripts/demo/run_graceful_shutdown_demo.sh
-```
-
-## 📋 配置
-
-### 基本配置
-
-项目包含一个完整的配置文件 `config.toml`，可以直接使用或根据需要修改：
+复制并编辑配置文件：
 
 ```bash
-# 编辑 config.toml 文件以适应您的环境
-vim config.toml
+cp config.toml config.local.toml
+# 编辑 config.local.toml
 ```
 
-> **注意**:
-> - `config.toml` 包含详细的配置说明和示例，建议先阅读其中的注释
-> - 如果不存在 `config.toml` 文件，程序会自动使用默认配置并创建该文件
-> - 生产环境建议根据实际需求调整配置参数
+### 运行
+
+```bash
+# 验证配置
+./target/release/dynamic-proxy --validate
+
+# 启动服务
+./target/release/dynamic-proxy -c config.local.toml
+
+# 查看帮助
+./target/release/dynamic-proxy --help
+
+# 查看版本信息
+./target/release/dynamic-proxy --version-info
+```
+
+## 配置文件说明
 
 ### 服务器配置
 
 ```toml
 [server]
-tcp_bind = "0.0.0.0:8080"    # TCP监听地址
-udp_bind = "0.0.0.0:8081"    # UDP监听地址
-buffer_size = 8192           # 缓冲区大小
-max_connections = 1000       # 最大连接数
-```
-
-### 多证书TLS配置
-
-```toml
-[tls]
-cert_path = "certs/server.crt"
-key_path = "certs/server.key"
-sni_routing = true
-
-[[tls.certificates]]
-hostname = "api.example.com"
-cert_path = "certs/api.crt"
-key_path = "certs/api.key"
-
-[[tls.certificates]]
-hostname = "*.example.com"
-cert_path = "certs/wildcard.crt"
-key_path = "certs/wildcard.key"
+tcp_bind = "0.0.0.0:8080"      # TCP监听地址
+udp_bind = "0.0.0.0:8081"      # UDP监听地址
+worker_threads = 4              # 工作线程数
+max_connections = 10000         # 最大连接数
+connection_timeout = 30         # 连接超时时间（秒）
+buffer_size = 8192             # 缓冲区大小
 ```
 
 ### Redis配置
 
 ```toml
 [redis]
-url = "redis://127.0.0.1:6379"
+url = "redis://localhost:6379"
+password = "your_password"
+db = 0
 pool_size = 10
-timeout_ms = 5000
-cache_ttl_secs = 300
-max_retries = 3
+connection_timeout = 5
+command_timeout = 3
 ```
 
-### 监控配置
+### 路由器配置
 
 ```toml
-[monitoring]
-metrics_bind = "0.0.0.0:9090"  # 指标服务器监听地址
-log_level = "info"             # 日志级别
-enable_metrics = true          # 启用指标收集
+[routers.round_robin]
+plugin = "round_robin"
+config = {}
+
+[routers.weighted]
+plugin = "weighted"
+config = { smooth_weighted = true }
+
+[routers.hash_ip]
+plugin = "hash"
+config = { hash_key = "client_ip" }
 ```
 
-## 🔧 Redis后端管理
+### 路由规则
 
-### 添加后端服务器
+```toml
+[[rules]]
+name = "web_traffic"
+protocol = "tcp"
+enabled = true
+router = "round_robin"
+
+[[rules.backends]]
+id = "web1"
+address = "192.168.1.10:80"
+weight = 1
+enabled = true
+
+[rules.matcher]
+type = "port"
+port = 80
+```
+
+## 监控和指标
+
+程序集成了Prometheus指标收集，包括：
+
+- 连接指标：活跃连接数、总连接数、连接持续时间
+- 请求指标：请求总数、请求持续时间、请求/响应大小
+- 后端指标：后端连接数、后端请求数、后端响应时间、后端健康状态
+- 路由器指标：路由器选择次数、路由器错误数
+- 系统指标：内存使用、CPU使用等
+
+## 健康检查
+
+程序支持自动健康检查功能：
+
+- 定期检查后端服务器可用性
+- 支持TCP连接检查
+- 可配置检查间隔、超时时间、重试次数
+- 自动标记不健康的后端并从负载均衡中移除
+
+## 信号处理
+
+程序支持以下信号：
+
+- `SIGTERM` / `SIGINT`: 优雅关闭
+- `SIGHUP`: 重新加载配置（计划中）
+
+## 开发
+
+### 添加新的路由器插件
+
+1. 在 `src/router/plugins/` 目录下创建新的路由器实现
+2. 实现 `Router` trait
+3. 在 `RouterManager::register_builtin_routers()` 中注册新路由器
+
+### 运行测试
 
 ```bash
-redis-cli SET "proxy:backends:my_service" '{
-  "address": "127.0.0.1:8080",
-  "weight": 100,
-  "healthy": true,
-  "last_check": 1234567890,
-  "metadata": {}
-}'
+cargo test
 ```
 
-### 查看所有后端
+### 代码检查
 
 ```bash
-redis-cli KEYS "proxy:backends:*"
+cargo clippy
+cargo fmt
 ```
 
-### 删除后端
+## 许可证
 
-```bash
-redis-cli DEL "proxy:backends:service_name"
-```
+[MIT License](LICENSE)
 
-## 🔄 路由规则
-
-路由规则支持多种条件和动作：
-
-### 条件类型
-
-- `SniPrefix`: SNI前缀匹配
-- `SniSuffix`: SNI后缀匹配
-- `SniExact`: SNI精确匹配
-- `SourceIp`: 源IP匹配
-- `DestinationPort`: 目标端口匹配
-- `Protocol`: 协议匹配（tcp/udp）
-
-### 动作类型
-
-- `Forward`: 转发到指定后端
-- `LoadBalance`: 负载均衡到多个后端
-- `Reject`: 拒绝连接
-- `TlsTerminate`: TLS终止并转发
-
-## 📊 监控
-
-### 指标端点
-
-访问 `http://localhost:9090/metrics` 查看Prometheus格式的指标。
-
-### 主要指标
-
-- `proxy_connections_total` - 总连接数
-- `proxy_bytes_transferred_total` - 传输字节数
-- `proxy_requests_total` - 请求总数
-- `proxy_backend_health` - 后端健康状态
-- `proxy_tls_handshakes_total` - TLS握手次数
-- `proxy_active_connections` - 当前活跃连接数
-- `proxy_errors_total` - 错误总数
-- `proxy_request_duration_seconds` - 请求处理时间
-- `proxy_backend_response_time_seconds` - 后端响应时间
-- `proxy_routing_decisions_total` - 路由决策总数
-
-### 日志
-
-结构化日志输出，支持多种日志级别：
-
-```bash
-RUST_LOG=debug cargo run --example enhanced_demo
-```
-
-## 🏗️ 架构设计
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client        │    │  Dynamic Proxy  │    │   Backend       │
-│                 │    │                 │    │   Services      │
-├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ TCP/UDP/TLS     │───▶│ TLS Handler     │───▶│ Service A       │
-│ Requests        │    │ SNI Detection   │    │ Service B       │
-│                 │    │ Multi-Cert      │    │ Service C       │
-└─────────────────┘    ├─────────────────┤    └─────────────────┘
-                       │ Routing Engine  │              ▲
-┌─────────────────┐    │ - Plugin System │              │
-│   Redis         │◀───│ - Load Balancer │──────────────┘
-│   Backend       │    │ - Health Check  │
-│   Storage       │    ├─────────────────┤
-├─────────────────┤    │ Monitoring      │    ┌─────────────────┐
-│ Backend Config  │    │ - Metrics       │───▶│ Prometheus      │
-│ Health Status   │    │ - Logging       │    │ Monitoring      │
-│ Routing Rules   │    │ - Tracing       │    └─────────────────┘
-└─────────────────┘    └─────────────────┘
-```
-
-## 🛡️ 优雅关机
-
-### 支持的信号
-
-- **SIGINT (Ctrl+C)** - 优雅关机
-- **SIGTERM** - 优雅关机（适用于系统服务）
-- **SIGQUIT** - 强制关机
-- **SIGHUP** - 配置重载（当前实现为优雅关机）
-
-### 关机流程
-
-1. **信号接收** → 关机管理器 → 广播关机信号
-2. **服务停止** → 停止接受新连接 → 各服务组件停止
-3. **连接排空** → 等待活跃连接完成 → 超时处理
-4. **资源清理** → 关闭插件 → 清理缓存 → 释放资源
-
-### 测试优雅关机
-
-```bash
-# 启动演示程序
-cargo run --example graceful_shutdown_demo
-
-# 在另一个终端中测试信号
-kill -INT <pid>    # 优雅关机
-kill -TERM <pid>   # 优雅关机
-kill -QUIT <pid>   # 强制关机
-```
-
-## 🔧 开发
-
-### 项目结构
-
-```
-dynamic-proxy/
-├── src/
-│   ├── config/          # 配置管理
-│   ├── proxy/           # 代理核心
-│   │   ├── tcp_proxy.rs # TCP代理
-│   │   ├── udp_proxy.rs # UDP代理
-│   │   └── tls_handler.rs # TLS处理
-│   ├── routing/         # 路由系统
-│   │   ├── plugin.rs    # 插件接口
-│   │   ├── rules.rs     # 路由规则
-│   │   └── redis_backend.rs # Redis后端
-│   ├── monitoring/      # 监控系统
-│   └── shutdown.rs      # 优雅关机
-├── examples/            # 示例代码
-│   ├── basic_usage.rs   # 基础使用示例
-│   ├── enhanced_demo.rs # 增强功能演示
-│   ├── graceful_shutdown_demo.rs # 优雅关机演示
-│   └── test_client.rs   # 测试客户端
-├── scripts/             # 脚本工具
-│   ├── demo.sh          # 交互式演示菜单
-│   ├── demo/            # 演示脚本
-│   │   ├── run_basic_demo.sh
-│   │   ├── run_enhanced_demo.sh
-│   │   └── run_graceful_shutdown_demo.sh
-│   ├── test/            # 测试脚本
-│   │   ├── run_test_client.sh
-│   │   └── test_fixes.sh
-│   ├── setup_redis_backends.sh # Redis初始化
-│   ├── test_enhanced_features.sh # 功能测试
-│   └── test_graceful_shutdown.sh # 关机测试
-├── config.toml          # 主配置文件
-└── docs/                # 项目文档
-    └── FIXES_SUMMARY.md # 修复总结文档
-```
-
-### 技术栈
-
-- **语言**: Rust
-- **异步运行时**: Tokio
-- **TLS**: rustls + tokio-rustls
-- **序列化**: serde + serde_json + toml
-- **日志**: tracing + tracing-subscriber
-- **指标**: prometheus
-- **Redis**: redis (aio功能)
-- **错误处理**: anyhow
-- **异步trait**: async-trait
-
-### 自定义插件
-
-```rust
-use async_trait::async_trait;
-use dynamic_proxy::routing::*;
-
-struct CustomPlugin;
-
-#[async_trait]
-impl RoutingPlugin for CustomPlugin {
-    fn name(&self) -> &str {
-        "custom_plugin"
-    }
-
-    async fn route(&self, context: &RoutingContext) -> Result<Option<RoutingDecision>> {
-        // 实现自定义路由逻辑
-        Ok(None)
-    }
-}
-```
-
-## 📈 性能
-
-- **高并发**: 基于Tokio异步运行时
-- **零拷贝**: 优化的数据传输
-- **连接复用**: 智能连接池管理
-- **内存效率**: 最小化内存分配
-
-## 🛡️ 安全
-
-- **TLS 1.3支持**: 最新的TLS协议
-- **证书验证**: 完整的证书链验证
-- **安全配置**: 默认安全的TLS配置
-- **访问控制**: 基于规则的访问控制
-
-## 📋 项目状态
-
-### ✅ 已实现功能
-
-- **核心代理** - TCP/UDP流量代理
-- **完整TLS支持** - 真实的SNI检测和多证书管理
-- **真实Redis集成** - 完整的Redis连接池和后端管理
-- **高级路由功能** - 支持通配符、权重、健康检查
-- **优雅关机系统** - 完整的信号处理和连接排空
-- **生产就绪** - 完整的监控、日志、错误处理
-
-### 🔄 后续改进方向
-
-1. **高级负载均衡** - 实现一致性哈希、最少连接等算法
-2. **证书管理** - 自动证书续期和Let's Encrypt集成
-3. **性能优化** - 内存池、连接复用、零拷贝等优化
-4. **管理界面** - Web管理界面和REST API
-5. **分布式部署** - 支持多实例部署和配置同步
-
-## 📝 许可证
-
-MIT License
-
-## 🤝 贡献
+## 贡献
 
 欢迎提交Issue和Pull Request！
 
-1. Fork项目
-2. 创建功能分支
-3. 提交更改
-4. 推送到分支
-5. 创建Pull Request
+## 技术栈
 
+- **Rust**: 主要编程语言
+- **Tokio**: 异步运行时
+- **Serde**: 序列化/反序列化
+- **TOML**: 配置文件格式
+- **Prometheus**: 指标收集
+- **Redis**: 数据存储（可选）
+- **Clap**: 命令行参数解析
+- **Tracing**: 日志记录
 
+## 性能特点
+
+- 零拷贝数据转发
+- 异步I/O处理
+- 内存池管理
+- 连接复用
+- 高并发支持
+
+## 部署建议
+
+- 使用systemd管理服务
+- 配置适当的文件描述符限制
+- 监控内存和CPU使用情况
+- 定期备份配置文件
+- 设置日志轮转
